@@ -1,0 +1,65 @@
+version: '3.6'
+
+services:
+  keycloak:
+    image: jboss/keycloak:4.0.0.Final
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 600M
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.port=8080
+        - traefik.frontend.rule=Host:keycloak.services.alin.be
+        - traefik.frontend.entryPoints=http,https
+        - traefik.frontend.redirect.entryPoint=https
+        - traefik.backend.loadbalancer.method=wrr
+      placement:
+        constraints:
+          - node.role == manager
+    healthcheck:
+          test: ["CMD", "curl", "-f", "http://localhost:8080"]
+          interval: 60s
+          timeout: 30s
+          retries: 5
+    environment:
+        - KEYCLOAK_USER=admin
+        - KEYCLOAK_PASSWORD=admin
+        - DB_VENDOR=postgres
+        - PROXY_ADDRESS_FORWARDING=true
+    volumes:
+        - /etc/localtime:/etc/localtime
+
+  postgres:
+    image: postgres:9.3.23-alpine
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.6"
+          memory: 200M
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - node.role == manager
+    healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U postgres"]
+            interval: 20s
+            timeout: 20s
+            retries: 5
+    volumes:
+        - ./postgres:/var/lib/postgresql/data
+        - /etc/localtime:/etc/localtime
+    environment:
+        - POSTGRES_DB=keycloak
+        - POSTGRES_USER=keycloak 
+        - POSTGRES_PASSWORD=password
+
+networks:
+  default:
+    external:
+      name: traefik-net
